@@ -1,0 +1,11 @@
+pandas
+numpy
+matplotlib
+scikit-learn
+seaborn
+requests
+beautifulsoup4
+Flask
+sqlalchemy
+psycopg2-binary
+gunicorn

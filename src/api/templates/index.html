@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloridaCastor &mdash; Florida Outdoor Weather Advisor</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <header class="site-header">
+        <div class="container">
+            <div class="header-brand">
+                <div class="brand-icon">FC</div>
+                <div>
+                    <h1 class="brand-name">FloridaCastor</h1>
+                    <p class="brand-tagline">Florida Outdoor Weather Advisor</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+
+        <!-- Hero -->
+        <section class="hero">
+            <div class="container">
+                <span class="hero-eyebrow">Florida Outdoor Weather Advisor</span>
+                <h2 class="hero-title">Know Before You Go Outdoors</h2>
+                <p class="hero-subtitle">
+                    FloridaCastor turns 24 hours of real-time weather data into one clear verdict &mdash;
+                    Good, Caution, or No-go &mdash; so Floridians can plan outdoor activities with confidence.
+                </p>
+                <a href="#forecast-tool" class="btn-primary hero-cta">Check My Outdoor Risk</a>
+            </div>
+        </section>
+
+        <!-- How It Works -->
+        <section class="how-it-works">
+            <div class="container">
+                <h3 class="hiw-heading">How It Works</h3>
+                <div class="steps-grid">
+                    <div class="step-card">
+                        <div class="step-num">1</div>
+                        <div class="step-content">
+                            <strong>Choose a Florida city</strong>
+                            <p>Select any supported city to pull live weather from the National Weather Service.</p>
+                        </div>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-num">2</div>
+                        <div class="step-content">
+                            <strong>Review the 24-hour forecast</strong>
+                            <p>See hourly conditions, heat index, precipitation chance, and a peak risk score out of 100.</p>
+                        </div>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-num">3</div>
+                        <div class="step-content">
+                            <strong>Get your recommendation</strong>
+                            <p>A clear verdict based on the worst conditions in the next 24 hours.</p>
+                            <div class="label-strip">
+                                <span class="label-chip good">Good</span>
+                                <span class="label-chip caution">Caution</span>
+                                <span class="label-chip nogo">No-go</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="container" id="forecast-tool">
+
+            <!-- City Selector -->
+            <div class="card selector-card">
+                <h2 class="selector-title">Check Outdoor Risk</h2>
+                <p class="selector-hint">
+                    Select a Florida city to get a risk assessment based on the next 24 hours of weather.
+                </p>
+                <div class="selector-row">
+                    <div class="select-wrapper">
+                        <select id="citySelect" class="city-select">
+                            <option value="">Select a city&hellip;</option>
+                        </select>
+                        <span class="select-arrow" aria-hidden="true">&#9662;</span>
+                    </div>
+                    <button id="submitBtn" class="btn-primary" onclick="getRecommendation()">
+                        Get Forecast
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="loading-state hidden">
+                <div class="spinner"></div>
+                <p>Fetching weather data&hellip;</p>
+            </div>
+
+            <!-- Error -->
+            <div id="errorCard" class="card error-card hidden">
+                <strong>Unable to load weather data</strong>
+                <p id="errorMsg"></p>
+            </div>
+
+            <!-- Results -->
+            <div id="results" class="hidden">
+
+                <!-- Recommendation Banner -->
+                <div id="recBanner" class="card rec-banner">
+                    <div class="rec-body">
+                        <div class="rec-left">
+                            <span class="rec-eyebrow">24-Hour Outlook</span>
+                            <span id="recLabel" class="rec-label">Good</span>
+                            <div class="rec-meta">
+                                <span id="recCity"></span>
+                                <span class="rec-dot">&middot;</span>
+                                <span id="recSeason"></span>
+                            </div>
+                        </div>
+                        <div class="rec-right">
+                            <div class="score-display">
+                                <span id="recScore" class="score-number">0</span>
+                                <span class="score-denom">/100</span>
+                            </div>
+                            <p class="score-caption">peak risk score</p>
+                        </div>
+                    </div>
+                    <p class="rec-footnote">
+                        Based on the highest-risk hour in the next 24 hours. Lower score is safer.
+                    </p>
+                </div>
+
+                <!-- Current Conditions -->
+                <div class="card">
+                    <h3 class="section-heading">Current Conditions</h3>
+                    <div class="metrics-grid" id="currentMetrics"></div>
+                </div>
+
+                <!-- 24-Hour Timeline -->
+                <div class="card">
+                    <h3 class="section-heading">24-Hour Timeline</h3>
+                    <div class="hours-scroll" id="hoursGrid"></div>
+                </div>
+
+            </div>
+
+        </div><!-- /#forecast-tool -->
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>
+                Weather data from the
+                <a href="https://www.weather.gov" target="_blank" rel="noopener">National Weather Service</a>.
+                For planning purposes only.
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        const LABEL_CLASS = { 'Good': 'good', 'Caution': 'caution', 'No-go': 'nogo' };
+
+        function show(id) { document.getElementById(id).classList.remove('hidden'); }
+        function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function val(v, suffix, fallback) {
+            fallback = fallback !== undefined ? fallback : '--';
+            if (v === null || v === undefined) return fallback;
+            return suffix ? v + suffix : String(v);
+        }
+
+        function formatTime(iso) {
+            const d = new Date(iso);
+            const h = d.getHours();
+            return (h % 12 || 12) + ' ' + (h >= 12 ? 'PM' : 'AM');
+        }
+
+        function titleCase(s) {
+            if (!s) return '';
+            return s.replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        async function loadCities() {
+            try {
+                const res = await fetch('/cities');
+                const cities = await res.json();
+                const sel = document.getElementById('citySelect');
+                cities.forEach(function(c) {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Failed to load cities:', e);
+            }
+        }
+
+        async function getRecommendation() {
+            const city = document.getElementById('citySelect').value;
+            if (!city) {
+                document.getElementById('citySelect').focus();
+                return;
+            }
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading\u2026';
+
+            hide('results');
+            hide('errorCard');
+            show('loading');
+
+            try {
+                const res = await fetch('/recommend?city=' + encodeURIComponent(city));
+                const data = await res.json();
+                if (!res.ok) {
+                    showError(data.error || 'Failed to load weather data.');
+                    return;
+                }
+                renderResults(data);
+            } catch (e) {
+                showError('Network error. Please try again.');
+            } finally {
+                hide('loading');
+                btn.disabled = false;
+                btn.textContent = 'Get Forecast';
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('errorMsg').textContent = msg;
+            show('errorCard');
+        }
+
+        function renderResults(data) {
+            const lc = LABEL_CLASS[data.overall.label_text] || 'good';
+
+            // Recommendation banner
+            const banner = document.getElementById('recBanner');
+            banner.className = 'card rec-banner ' + lc;
+            document.getElementById('recLabel').textContent = data.overall.label_text;
+            document.getElementById('recScore').textContent = data.overall.score;
+            document.getElementById('recCity').textContent = data.city;
+            document.getElementById('recSeason').textContent = titleCase(data.overall.season);
+
+            // Current conditions
+            const c = data.current;
+            const windStr = c.wind_mph !== null && c.wind_mph !== undefined
+                ? c.wind_mph + ' mph' + (c.windDirection ? ' ' + c.windDirection : '')
+                : '--';
+
+            const metrics = [
+                { label: 'Temperature',     value: val(c.tempF, '\u00B0F') },
+                { label: 'Humidity',        value: val(c.humidity, '%') },
+                { label: 'Wind',            value: windStr },
+                { label: 'Precip. Chance',  value: val(c.precip_prob, '%') },
+                { label: 'Heat Index',      value: val(c.heat_index, '\u00B0F') },
+                { label: 'Conditions',      value: c.shortForecast || '--' },
+            ];
+
+            document.getElementById('currentMetrics').innerHTML = metrics.map(function(m) {
+                return '<div class="metric-card">'
+                    + '<div class="metric-label">' + m.label + '</div>'
+                    + '<div class="metric-value">' + m.value + '</div>'
+                    + '</div>';
+            }).join('');
+
+            // 24-hour timeline
+            document.getElementById('hoursGrid').innerHTML = data.hours.map(function(h) {
+                const hc = LABEL_CLASS[h.label_text] || 'good';
+                return '<div class="hour-card ' + hc + '">'
+                    + '<div class="hour-time">' + formatTime(h.startTime) + '</div>'
+                    + '<div class="hour-temp">' + val(h.tempF, '\u00B0F') + '</div>'
+                    + '<div class="hour-precip">' + val(h.precip_prob, '%') + ' precip</div>'
+                    + '<div class="hour-badge ' + hc + '">' + h.label_text + '</div>'
+                    + '</div>';
+            }).join('');
+
+            show('results');
+            document.getElementById('recBanner').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        loadCities();
+    </script>
+
+</body>
+</html>
