@@ -299,3 +299,122 @@ def score_to_label(score):
     elif score >= 35:
         return 1  # Caution
     return 0      # Good
+
+
+# ---- Deterministic, model-free explanations -------------------------------
+
+# Fixed display priority for deterministic tie-breaking (lower shows first).
+_FACTOR_ORDER = {"storm": 0, "heat": 1, "precip": 2, "wind": 3, "humidity": 4, "temp": 5}
+
+
+def explain_risk_factors(row, top_n: int = 5, min_n: int = 3) -> list:
+    """
+    Produce a deterministic, plain-English explanation of one forecast hour's risk.
+
+    No model or external API is involved: every factor is derived directly from the
+    same weather features and risk signals used by build_cost_based_risk_score().
+    Each factor reports `score`, its share of that hour's 0-100 risk score, so the
+    returned list doubles as a ranked list of the biggest risk drivers.
+
+    Args:
+        row: a DataFrame row (Series) that has already passed through risk_signals()
+             and build_cost_based_risk_score() — typically the peak-risk hour.
+
+    Returns:
+        A list (3-5 items) sorted by importance, each:
+            {"text": str, "tone": "warn"|"good", "score": float, "top": bool}
+        `tone` drives the UI icon (warn -> warning, good -> check). The single
+        largest risk driver is flagged with "top": True.
+    """
+    def num(v, default=0.0):
+        try:
+            f = float(v)
+            return default if np.isnan(f) else f
+        except (TypeError, ValueError):
+            return default
+
+    humidity = num(row.get("humidity"))
+    tempf = num(row.get("tempF"))
+    storm = int(num(row.get("thunderstorm")))
+
+    high_rain = int(num(row.get("high_rain_risk")))
+    high_wind = int(num(row.get("high_wind_risk")))
+    heat_wave = int(num(row.get("heat_wave_risk")))
+    storm_haz = num(row.get("summer_storm_risk"))
+
+    precip_sev = num(row.get("precip_severity_0_1"))
+    heat_sev = num(row.get("heat_severity_0_1"))
+    wind_sev = num(row.get("wind_severity_0_1"))
+
+    # Same context multiplier and cap used by build_cost_based_risk_score().
+    context_mult = 1.0 + 0.15 * num(row.get("is_wet_season")) + 0.10 * num(row.get("hurricane_season"))
+    cap = 25.0
+
+    def share(points):
+        # Portion of the final 0-100 score attributable to this factor (pre-clip).
+        return round(100.0 * points * context_mult / cap, 1)
+
+    factors = []
+
+    # --- Thunderstorm / storm (hazard: 5 * summer_storm_risk) ---
+    if storm:
+        factors.append({"key": "storm", "tone": "warn",
+                        "text": "Thunderstorm activity expected", "points": 5.0 * storm_haz})
+    else:
+        factors.append({"key": "storm", "tone": "good",
+                        "text": "No thunderstorm activity", "points": 0.0})
+
+    # --- Heat index (hazard: 4 * heat_wave_risk; severity: 2 * heat_sev) ---
+    heat_pts = 4.0 * heat_wave + 2.0 * heat_sev
+    if heat_wave:
+        factors.append({"key": "heat", "tone": "warn", "text": "Dangerous heat index", "points": heat_pts})
+    elif heat_sev > 0:
+        factors.append({"key": "heat", "tone": "warn", "text": "Elevated heat index", "points": heat_pts})
+    else:
+        factors.append({"key": "heat", "tone": "good", "text": "Comfortable heat index", "points": 0.0})
+
+    # --- Precipitation (hazard: 2 * high_rain_risk; severity: 2 * precip_sev) ---
+    precip_pts = 2.0 * high_rain + 2.0 * precip_sev
+    if high_rain:
+        factors.append({"key": "precip", "tone": "warn", "text": "High precipitation probability", "points": precip_pts})
+    elif precip_sev > 0:
+        factors.append({"key": "precip", "tone": "warn", "text": "Moderate precipitation risk", "points": precip_pts})
+    else:
+        factors.append({"key": "precip", "tone": "good", "text": "Low precipitation probability", "points": 0.0})
+
+    # --- Wind (hazard: 3 * high_wind_risk; severity: 1 * wind_sev) ---
+    wind_pts = 3.0 * high_wind + 1.0 * wind_sev
+    if high_wind:
+        factors.append({"key": "wind", "tone": "warn", "text": "Strong winds forecast", "points": wind_pts})
+    elif wind_sev > 0:
+        factors.append({"key": "wind", "tone": "warn", "text": "Breezy conditions", "points": wind_pts})
+    else:
+        factors.append({"key": "wind", "tone": "good", "text": "Low wind speeds", "points": 0.0})
+
+    # --- Humidity (context only: feeds the heat index, not scored directly) ---
+    if humidity >= 80:
+        factors.append({"key": "humidity", "tone": "warn", "text": "Elevated humidity", "points": 0.0})
+    elif 0 < humidity <= 55:
+        factors.append({"key": "humidity", "tone": "good", "text": "Comfortable humidity", "points": 0.0})
+
+    # --- Temperature (positive signal only; heat risk handled via heat index) ---
+    if 60 <= tempf <= 85:
+        factors.append({"key": "temp", "tone": "good", "text": "Mild temperatures", "points": 0.0})
+
+    for f in factors:
+        f["score"] = share(f["points"])
+        f["order"] = _FACTOR_ORDER.get(f["key"], 99)
+
+    # Warnings first, ranked by actual score contribution (biggest driver on top);
+    # positives after, in fixed order. Deterministic given identical input.
+    warns = sorted((f for f in factors if f["tone"] == "warn"), key=lambda f: (-f["points"], f["order"]))
+    goods = sorted((f for f in factors if f["tone"] == "good"), key=lambda f: f["order"])
+    ordered = (warns + goods)[:max(top_n, min_n)][:top_n]
+
+    if ordered and ordered[0]["tone"] == "warn" and ordered[0]["points"] > 0:
+        ordered[0]["top"] = True
+
+    return [
+        {"text": f["text"], "tone": f["tone"], "score": f["score"], "top": f.get("top", False)}
+        for f in ordered
+    ]

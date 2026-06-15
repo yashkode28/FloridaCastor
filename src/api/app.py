@@ -11,6 +11,7 @@ from sqlalchemy import text
 from src.db import get_engine
 from src.features.feature_utils import (
     build_cost_based_risk_score,
+    explain_risk_factors,
     forecast_to_df,
     heat_index,
     risk_signals,
@@ -186,8 +187,13 @@ def recommend():
         df = build_cost_based_risk_score(df)
         df["risk_label"] = df["risk_score_0_100"].apply(score_to_label)
 
-        peak_score = _safe(float(df["risk_score_0_100"].max()))
+        peak_idx = df["risk_score_0_100"].idxmax()
+        peak_row = df.loc[peak_idx]
+        peak_score = _safe(float(peak_row["risk_score_0_100"]))
         peak_label = score_to_label(peak_score) if peak_score is not None else 0
+
+        # Deterministic, model-free explanation of the hour that drove the verdict.
+        factors = explain_risk_factors(peak_row)
 
         first = df.iloc[0]
         raw0 = raw_hours[0]
@@ -227,6 +233,7 @@ def recommend():
                 "label_text": _LABEL_NAMES[peak_label],
                 "score": peak_score,
                 "season": str(df["florida_season"].iloc[0]),
+                "factors": factors,
             },
             "current": current,
             "hours": hours_out,

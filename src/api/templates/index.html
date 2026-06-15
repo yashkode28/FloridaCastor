@@ -131,6 +131,15 @@
                     </p>
                 </div>
 
+                <!-- Why This Verdict -->
+                <div class="card">
+                    <h3 class="section-heading">Why This Verdict</h3>
+                    <ul class="factors-list" id="factorsList"></ul>
+                    <p class="factors-note">
+                        Top factors from the highest-risk hour, ranked by their effect on the score.
+                    </p>
+                </div>
+
                 <!-- Current Conditions -->
                 <div class="card">
                     <h3 class="section-heading">Current Conditions</h3>
@@ -244,6 +253,18 @@
             document.getElementById('recScore').textContent = data.overall.score;
             document.getElementById('recCity').textContent = data.city;
             document.getElementById('recSeason').textContent = titleCase(data.overall.season);
+
+            // Why this verdict (deterministic explanations)
+            const factors = data.overall.factors || [];
+            document.getElementById('factorsList').innerHTML = factors.map(function(f) {
+                const icon = f.tone === 'warn' ? '⚠' : '✓';
+                const top = f.top ? '<span class="factor-top">Top factor</span>' : '';
+                return '<li class="factor-item ' + f.tone + '">'
+                    + '<span class="factor-icon">' + icon + '</span>'
+                    + '<span class="factor-text">' + f.text + '</span>'
+                    + top
+                    + '</li>';
+            }).join('');
 
             // Current conditions
             const c = data.current;
