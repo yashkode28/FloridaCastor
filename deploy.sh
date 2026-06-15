@@ -8,7 +8,9 @@ ENVIRONMENT=floridacastor-env
 APP_NAME=floridacastor
 POSTGRES_SERVER=floridacastor-db
 DB_ADMIN_USER=weatheradmin
-DB_ADMIN_PASSWORD='Castor#2025!'
+# Provide the DB password via environment, e.g.:  DB_ADMIN_PASSWORD='...' ./deploy.sh
+# (Never hardcode it here — this script is committed to source control.)
+DB_ADMIN_PASSWORD="${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD env var before running deploy.sh}"
 DB_NAME=weather_db
 
 if [ "${1}" != "--resume" ] && [ "${1}" != "--resume-from-db" ]; then
