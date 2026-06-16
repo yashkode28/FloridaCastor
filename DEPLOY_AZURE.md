@@ -22,7 +22,7 @@ Replace the values in `< >` with your own choices.
 
 ```bash
 RESOURCE_GROUP=floridacastor-rg
-LOCATION=eastus                          # or eastus2, westus2, etc.
+LOCATION=centralus                       # see note below — free-trial subs are blocked in many regions
 ACR_NAME=floridacastoracr                # globally unique, lowercase letters and numbers only
 ENVIRONMENT=floridacastor-env
 APP_NAME=floridacastor
@@ -77,8 +77,9 @@ Run this from the project root (where the `Dockerfile` lives).
 # Log in to your registry
 az acr login --name $ACR_NAME
 
-# Build
-docker build -t $ACR_NAME.azurecr.io/floridacastor:latest .
+# Build — --platform linux/amd64 is REQUIRED on Apple Silicon Macs,
+# because Azure Container Apps runs amd64 and rejects an arm64-only image.
+docker build --platform linux/amd64 -t $ACR_NAME.azurecr.io/floridacastor:latest .
 
 # Push
 docker push $ACR_NAME.azurecr.io/floridacastor:latest
@@ -106,11 +107,21 @@ az postgres flexible-server create \
     --sku-name Standard_B1ms \
     --tier Burstable \
     --version 16 \
-    --database-name $DB_NAME \
-    --public-access 0.0.0.0
+    --public-access 0.0.0.0 \
+    --yes
+
+# Create the application database on the new server
+az postgres flexible-server db create \
+    --resource-group $RESOURCE_GROUP \
+    --server-name $POSTGRES_SERVER \
+    --name $DB_NAME
 ```
 
 `--public-access 0.0.0.0` allows connections from all Azure services (including Container Apps).
+
+> Recent Azure CLI versions reject `--database-name` on `flexible-server create`
+> (it now applies only to elastic clusters), so the database is created as a
+> separate `flexible-server db create` step.
 
 **Verify:**
 ```bash
@@ -136,8 +147,8 @@ DB_HOST=$POSTGRES_SERVER.postgres.database.azure.com
 MY_IP=$(curl -s ifconfig.me)
 az postgres flexible-server firewall-rule create \
     --resource-group $RESOURCE_GROUP \
-    --name $POSTGRES_SERVER \
-    --rule-name allow-local \
+    --server-name $POSTGRES_SERVER \
+    --name allow-local \
     --start-ip-address $MY_IP \
     --end-ip-address $MY_IP
 
@@ -320,7 +331,7 @@ The most common issue. Debug in order:
 1. Confirm the secret was set: `az containerapp secret list --name $APP_NAME --resource-group $RESOURCE_GROUP`
 2. Check the server FQDN: must be `<server-name>.postgres.database.azure.com`
 3. Check SSL: `sslmode=require` must be in the connection string
-4. Check firewall: `az postgres flexible-server firewall-rule list --name $POSTGRES_SERVER --resource-group $RESOURCE_GROUP`
+4. Check firewall: `az postgres flexible-server firewall-rule list --server-name $POSTGRES_SERVER --resource-group $RESOURCE_GROUP`
 
 ---
 
