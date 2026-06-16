@@ -44,5 +44,5 @@ docker push floridacastoracr.azurecr.io/floridacastor:latest
 ./redeploy.sh
 ```
 
-image.png # tallahassee caution
-image.png # miami good
+<img width="892" height="910" alt="image" src="https://github.com/user-attachments/assets/9316de8f-2c2b-4d38-b849-f7b2817105e4" />
+
