@@ -1,6 +1,6 @@
 # FloridaCastor
 
-**Live app:** https://floridacastor.graypond-6ab7b932.centralus.azurecontainerapps.io
+**Live app:** https://floridacastor.purplehill-d826bb9b.centralus.azurecontainerapps.io/ 
 
 A Florida outdoor weather risk advisor. Select any major Florida city to get a 24-hour risk assessment — **Good**, **Caution**, or **No-go** — based on real-time weather data from the National Weather Service.
 
