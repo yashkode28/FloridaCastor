@@ -45,4 +45,5 @@ docker push floridacastoracr.azurecr.io/floridacastor:latest
 ```
 
 <img width="892" height="910" alt="image" src="https://github.com/user-attachments/assets/9316de8f-2c2b-4d38-b849-f7b2817105e4" />
+<img width="909" height="919" alt="image" src="https://github.com/user-attachments/assets/fdfd3def-9d64-45d7-8811-507fb8807f88" />
 
